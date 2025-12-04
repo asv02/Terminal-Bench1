@@ -1,0 +1,175 @@
+name: Review Task with Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # Check if this is a manual trigger via comment
+  check-trigger:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issue_comment'
+    outputs:
+      triggered: ${{ steps.check.outputs.triggered }}
+      tasks: ${{ steps.find-tasks.outputs.tasks }}
+      pr_head_sha: ${{ steps.pr-details.outputs.head_sha }}
+    steps:
+      - name: Check if comment triggers review
+        id: check
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          # Check if comment contains trigger phrase (case insensitive)
+          if echo "$COMMENT" | grep -iE '^/snorkel-ai review|^@snorkel-ai review|^snorkel-ai review' > /dev/null; then
+            echo "triggered=true" >> $GITHUB_OUTPUT
+            echo "✅ Snorkel AI review triggered by comment"
+          else
+            echo "triggered=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Comment does not trigger review"
+          fi
+      
+      - name: React to comment
+        if: steps.check.outputs.triggered == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          comment-id: ${{ github.event.comment.id }}
+          reactions: eyes
+      
+      - name: Check if on a PR
+        if: steps.check.outputs.triggered == 'true'
+        run: |
+          if [ "${{ github.event.issue.pull_request }}" == "" ]; then
+            echo "❌ Comment is on an issue, not a PR. Skipping."
+            exit 1
+          fi
+      
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.triggered == 'true'
+        with:
+          fetch-depth: 0
+      
+      - name: Install jq
+        if: steps.check.outputs.triggered == 'true'
+        run: sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Get PR head SHA and checkout PR branch
+        if: steps.check.outputs.triggered == 'true'
+        id: pr-details
+        run: |
+          PR_NUMBER="${{ github.event.issue.number }}"
+          PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+          echo "head_sha=$PR_HEAD_SHA" >> $GITHUB_OUTPUT
+          echo "Retrieved PR #$PR_NUMBER head SHA: $PR_HEAD_SHA"
+          
+          # Checkout the PR branch
+          git fetch origin "$PR_HEAD_SHA"
+          git checkout "$PR_HEAD_SHA"
+          echo "Checked out PR branch at commit: $(git log -1 --oneline)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Find modified tasks in PR
+        if: steps.check.outputs.triggered == 'true'
+        id: find-tasks
+        run: |
+          PR_NUMBER="${{ github.event.issue.number }}"
+          
+          echo "Checking PR #$PR_NUMBER for modified tasks..."
+          gh pr view "$PR_NUMBER" --json files --jq '.files[].path' > changed_files.txt
+          
+          echo "Changed files:"
+          cat changed_files.txt
+          
+          TASKS=$(cat changed_files.txt | grep -E '^tasks/[^/]+/' | cut -d'/' -f2 | sort | uniq | jq -R . | jq -sc .)
+          
+          if [ "$TASKS" = "[]" ] || [ -z "$TASKS" ]; then
+            echo "No tasks modified in this PR"
+            echo "tasks=[]" >> $GITHUB_OUTPUT
+          else
+            echo "Modified tasks: $TASKS"
+            echo "tasks=$TASKS" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  review-task-with-claude:
+    runs-on: ubuntu-latest
+    needs: [check-trigger]
+    if: needs.check-trigger.outputs.triggered == 'true'
+    strategy:
+      matrix:
+        task: ${{ fromJSON(needs.check-trigger.outputs.tasks) }}
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Debug checkout info
+        run: |
+          echo "PR Head SHA: ${{ needs.check-trigger.outputs.pr_head_sha }}"
+          echo "Task to review: ${{ matrix.task }}"
+          
+      - uses: actions/checkout@v4
+        with:
+          # Checkout the PR branch so new tasks are available
+          ref: ${{ needs.check-trigger.outputs.pr_head_sha }}
+          fetch-depth: 0
+      
+      - name: Verify task exists
+        run: |
+          echo "Current branch/commit:"
+          git log -1 --oneline
+          echo ""
+          echo "Checking for task directory:"
+          ls -la tasks/ | grep "${{ matrix.task }}" || echo "Task ${{ matrix.task }} not found in tasks/"
+          echo ""
+          if [ -d "tasks/${{ matrix.task }}" ]; then
+            echo "✅ Task exists"
+            ls -la "tasks/${{ matrix.task }}/"
+          else
+            echo "❌ Task does not exist"
+            echo "Available tasks:"
+            ls -1 tasks/
+          fi
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install claude-agent-sdk
+      
+      - name: Review task with Claude Code
+        run: |
+          python scripts_python/review_task_with_claude.py \
+            "${{ matrix.task }}" \
+            --output task-review-comment.md
+      
+      - name: Hide previous comments
+        id: hide-comment
+        uses: int128/hide-comment-action@v1
+        with:
+          authors: "github-actions[bot]"
+          ends-with: <!-- claude-task-review-end -->
+      
+      - name: Add comment to PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body-path: "task-review-comment.md"
+

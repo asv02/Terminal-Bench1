@@ -1,0 +1,26 @@
+name: Mark stale pull requests
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/stale@v9
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        days-before-stale: 3
+        days-before-close: 4
+        delete-branch: false
+        stale-pr-message: 'This PR looks pretty stale. It will be closed automatically in 4 days. Add the ignore-stale label to mark this PR as exempt.'
+        stale-pr-label: 'no-pr-activity'
+        exempt-pr-labels: 'ignore-stale'
+        ascending: true
+        operations-per-run: 600

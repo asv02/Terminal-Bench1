@@ -1,0 +1,220 @@
+name: Test Tasks with Multiple Agents (Harbor)
+
+on:
+  pull_request:
+    paths:
+      - "harbor_tasks/**"
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  find-modified-tasks:
+    runs-on: ubuntu-latest
+    name: Find modified test tasks
+
+    outputs:
+      tasks: ${{ steps.find-modified.outputs.tasks }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: harbor_tasks/**/*
+      - name: Find modified test tasks
+        id: find-modified
+        run: |
+          # Get all modified task directories
+          TASKS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n' | grep -E '^harbor_tasks/[^/]+/' | cut -d'/' -f2 | sort | uniq)
+
+          # Clean up the task list
+          TASKS=$(echo "$TASKS" | tr ' ' '\n' | grep -v '^$' | tr '\n' ' ' | sed 's/^ *//' | sed 's/ $//')
+
+          echo "Modified tasks to test: $TASKS"
+          
+          # Convert space-separated list to JSON array (compact format)
+          TASKS_ARRAY=$(echo "$TASKS" | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -sc .)
+          echo "tasks=$TASKS_ARRAY" >> $GITHUB_OUTPUT
+
+  quality-by-llm:
+    needs: find-modified-tasks
+    strategy:
+      matrix:
+        task: ${{ fromJSON(needs.find-modified-tasks.outputs.tasks) }}
+    name: Check quality of ${{ matrix.task }} by LLM
+    uses: ./.github/workflows/harbor-check-quality-by-llm.yaml
+    with:
+      task: ${{ matrix.task }}
+    secrets: inherit
+
+  test-non-agents:
+    needs: find-modified-tasks
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - name: "oracle"
+            display: "Oracle Solution"
+            required: true
+            key: "oracle"
+          - name: "nop"
+            display: "NOP Agent (Should Fail)"
+            required: true
+            key: "nop"
+        run: [1]
+        task: ${{ fromJSON(needs.find-modified-tasks.outputs.tasks) }}
+    name: Test Non-Agents with ${{ matrix.agent.display }} - ${{ matrix.task }} - ${{ matrix.run }} (Harbor)
+    uses: ./.github/workflows/harbor-test-single-task.yaml
+    with:
+      agent: ${{ matrix.agent.name }}
+      run: ${{ matrix.run }}
+      key: ${{ matrix.agent.key }}
+      model: ${{ matrix.agent.model }}
+      required: ${{ matrix.agent.required }}
+      task: ${{ matrix.task }}
+
+  test-agents:
+    needs: [find-modified-tasks, test-non-agents]
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - name: "codex"
+            display: "Codex (GPT-5)"
+            model: "openai/gpt-5"
+            required: false
+            key: "codex-gpt5"
+          - name: "claude-code"
+            display: "Claude-Code (Claude 4.5 Sonnet)"
+            model: "anthropic/claude-sonnet-4-5-20250929"
+            required: false
+            key: "claude-code-4-5-sonnet"
+        run: [1, 2, 3, 4, 5]
+        task: ${{ fromJSON(needs.find-modified-tasks.outputs.tasks) }}
+    name: Test Agents with ${{ matrix.agent.display }} - ${{ matrix.task }} - ${{ matrix.run }} (Harbor)
+    uses: ./.github/workflows/harbor-test-single-task.yaml
+    with:
+      agent: ${{ matrix.agent.name }}
+      run: ${{ matrix.run }}
+      key: ${{ matrix.agent.key }}
+      model: ${{ matrix.agent.model }}
+      required: ${{ matrix.agent.required }}
+      task: ${{ matrix.task }}
+    secrets: inherit
+
+  # Summary job to provide clear PR status
+  test-summary:
+    runs-on: ubuntu-latest
+    needs: [find-modified-tasks, test-agents, test-non-agents]
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: jobs/
+        continue-on-error: true
+      - name: Print the content of the jobs directory recursively
+        run: |
+          tree -a jobs/
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+          # Install numpy for summarizing runs
+          pip install numpy
+      - name: Debug an agent run if failure
+        run: |
+          # Make the consolidate script executable
+          chmod +x scripts_bash/harbor-consolidate-parallel-runs.sh
+          for task in $(jq -r '.[]' <<< '${{ needs.find-modified-tasks.outputs.tasks }}'); do
+            # Consolidate parallel runs into a single run
+            ./scripts_bash/harbor-consolidate-parallel-runs.sh --new-job-id consolidated-$task --task-id $task
+            for N_TRIALS in {10..1}; do
+              echo "Debugging $task with $N_TRIALS trials"
+              if uv run harbor tasks debug -m anthropic/claude-sonnet-4-20250514 --job-id consolidated-$task --tasks-dir harbor_tasks -o debug-output-${task}.json --n-trials $N_TRIALS $task; then
+                break
+              fi
+            done
+          done
+      - name: Upload all session recordings
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobs-${{ github.event.pull_request.number }}
+          path: jobs/
+          retention-days: 1
+      - name: Run a Python script
+        run: uv run python scripts_python/harbor_summarize_runs.py
+        id: summarize_runs
+      - name: Hide comment
+        id: hide-comment
+        uses: int128/hide-comment-action@v1
+        with:
+          authors: "github-actions[bot]"
+          ends-with: <!-- test-summary-end -->
+      - name: Add comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: "summary-of-runs-comment.md"
+      - name: Set difficulty output as a label
+        run: |
+          # Get existing labels
+          EXISTING_LABELS=$(gh pr view "$NUMBER" --json labels --jq '.labels[].name')
+
+          # Check if the new label already exists
+          if echo "$EXISTING_LABELS" | grep -q "^${LABEL}$"; then
+            echo "Label '$LABEL' already exists, no change needed"
+          else
+            # Remove any existing difficulty labels
+            for difficulty in "difficulty:hard" "difficulty:medium" "difficulty:easy" "difficulty:trivial" "difficulty:n/a"; do
+              if echo "$EXISTING_LABELS" | grep -q "^${difficulty}$"; then
+                echo "Removing old label: $difficulty"
+                gh pr edit "$NUMBER" --remove-label "$difficulty" || true
+              fi
+            done
+
+            # Add the new label
+            echo "Adding new label: $LABEL"
+            gh pr edit "$NUMBER" --add-label "$LABEL"
+          fi
+
+          # Error out if the difficulty is trivial or n/a
+          if [ "$LABEL" = "difficulty:trivial" ] || [ "$LABEL" = "difficulty:n/a" ]; then
+            echo "❌ Error: trivial or n/a difficulty is not allowed"
+            exit 1
+          fi
+        env:
+          NUMBER: ${{ github.event.pull_request.number }}
+          LABEL: ${{ steps.summarize_runs.outputs.difficulty }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+      - name: Error out if the task is not solvable
+        if: steps.summarize_runs.outputs.solvable != 'true'
+        run: |
+          echo "❌ Error: it's not clear if this task is solvable or simply super hard"
+          exit 1

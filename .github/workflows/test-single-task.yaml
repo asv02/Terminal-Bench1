@@ -1,0 +1,106 @@
+name: Test Single Task
+
+on:
+  workflow_call:
+    inputs:
+      agent:
+        type: string
+        description: The agent to test
+      run:
+        type: string
+        description: The run to test
+      key:
+        type: string
+        description: The key to use for the run
+      model:
+        type: string
+        description: The model to test
+      required:
+        type: boolean
+        description: Whether the agent is required
+        default: true
+      task:
+        type: string
+        description: The task to test
+
+jobs:
+  test-single-task:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ !inputs.required }}
+    name: Test with ${{ inputs.agent }} - ${{ inputs.run }}
+
+    env:
+      OPENAI_BASE_URL: "https://api.portkey.ai/v1"
+      OPENAI_API_KEY: ${{ secrets.PORTKEY_API_KEY }}
+      ANTHROPIC_AUTH_TOKEN: "dummy"
+      ANTHROPIC_BASE_URL: "https://api.portkey.ai"
+      ANTHROPIC_API_KEY: ${{ secrets.PORTKEY_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+          # Use our portkey branch
+          sed -i 's|"terminal-bench==[0-9.]\+"|"terminal-bench @ git+https://github.com/snorkel-ai/terminal-bench.git@portkey"|' pyproject.toml
+
+          # Install jq and bc for parsing results
+          sudo apt-get update
+          sudo apt-get install -y jq bc
+
+      - name: Run tests for modified tasks
+        id: run-tests
+        run: |
+          # Make the script executable
+          chmod +x scripts_bash/test-modified-tasks.sh
+
+          # Build the command with agent and model parameters
+          CMD="./scripts_bash/test-modified-tasks.sh --agent ${{ inputs.agent }} --run ${{ inputs.run }} --key ${{ inputs.key }}"
+          if [ -n "${{ inputs.model }}" ]; then
+            CMD="$CMD --model ${{ inputs.model }}"
+          fi
+          if [ "${{ inputs.required }}" != "true" ]; then
+            CMD="$CMD --no-fail-on-error"
+          fi
+          CMD="$CMD ${{ inputs.task }}"
+
+          # Run the script and capture result
+          mkdir -p /tmp/test-results
+
+          # Run the command (it will write result to runs/github-action-$task-$RUN/results.json)
+          $CMD
+
+      - name: Print agent logs
+        if: always()
+        run: |
+          # Find the tests.log file
+          log_file=$(find runs/github-action-${{ inputs.key }}_${{ inputs.task }}_${{ inputs.run }} -name "agent.log")
+          # Cat the agent.log file
+          cat $log_file
+
+      - name: Print tests logs
+        if: always()
+        run: |
+          # Find the tests.log file
+          log_file=$(find runs/github-action-${{ inputs.key }}_${{ inputs.task }}_${{ inputs.run }} -name "tests.log")
+          # Cat the tests.log file
+          cat $log_file
+
+      - name: Upload session recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-action-${{ inputs.key }}_${{ inputs.task }}_${{ inputs.run }}
+          path: runs/github-action-${{ inputs.key }}_${{ inputs.task }}_${{ inputs.run }}
+          retention-days: 1

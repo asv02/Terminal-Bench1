@@ -1,0 +1,36 @@
+name: TB Eval Change Notification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - "scripts_bash/**"
+      - "scripts_python/**"
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List changed files
+        run: |
+          FILES=$(git diff --name-only HEAD^ HEAD)
+
+          # Try to extract PR number from commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B HEAD)
+          PR_NUMBER=$(echo "$COMMIT_MSG" | grep -oE 'Merge pull request #[0-9]+' | grep -oE '[0-9]+' | head -1)
+
+          echo "🔔 A TB Check workflow change has been merged into the main branch."
+          if [ -n "$PR_NUMBER" ]; then
+            echo "PR URL: https://github.com/${{ github.repository }}/pull/$PR_NUMBER"
+          fi
+          echo "Changed files:"
+          echo "--------------------------------"
+          echo "$FILES"
+          echo "--------------------------------"

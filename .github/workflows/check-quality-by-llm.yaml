@@ -1,0 +1,75 @@
+name: Check Quality by LLM
+
+on:
+  workflow_call:
+    inputs:
+      task:
+        type: string
+        description: The task to test
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check-quality-by-llm:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.PORTKEY_API_KEY }}
+      OPENAI_BASE_URL: https://api.portkey.ai/v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+          # Install terminal-bench
+          uv tool install terminal-bench
+
+          # Install jq and bc for parsing results
+          sudo apt-get update
+          sudo apt-get install -y jq bc
+
+      - name: Check quality by LLM
+        run: |
+          # Run the check-quality-by-llm.sh
+          uv run tb tasks check ${{ inputs.task }} -m openai/@openai/gpt-5 --output-path output.json
+
+      - name: Format the output to a markdown file
+        run: |
+          echo "## Quality Check Results" > quality-by-llm-comment.md
+          echo "| Check       | Outcome  | Explanation              |" >> quality-by-llm-comment.md
+          echo "|-------------|----------|--------------------------|" >> quality-by-llm-comment.md
+          jq -r '
+            def escape_markdown:
+              gsub("\\\\"; "\\\\\\\\") |
+              gsub("\\|"; "\\\\|") |
+              gsub("\\*"; "\\\\*") |
+              gsub("_"; "\\\\_");
+
+            to_entries[] |
+            (if .value.outcome == "pass" then "✅ pass"
+             elif .value.outcome == "fail" then "❌ fail"
+             elif .value.outcome == "not_applicable" then "➖ not_applicable"
+             else .value.outcome
+             end) as $outcome |
+            "| \(.key) | \($outcome) | \(.value.explanation | escape_markdown) |"
+          ' output.json >> quality-by-llm-comment.md
+          echo "<!-- check-quality-by-llm-end -->" >> quality-by-llm-comment.md
+      - name: Hide comment
+        id: hide-comment
+        uses: int128/hide-comment-action@v1
+        with:
+          authors: "github-actions[bot]"
+          ends-with: <!-- check-quality-by-llm-end -->
+      - name: Add comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: "quality-by-llm-comment.md"
