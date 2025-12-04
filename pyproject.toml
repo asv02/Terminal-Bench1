@@ -1,0 +1,30 @@
+[project]
+name = "snorkel-tb-tasks"
+version = "0.1.0"
+description = "CLI to help Snorkel Terminal-Bench Tasks"
+readme = "README.md"
+authors = [
+    { name = "Hiromu Hota", email = "hiromu.hota@snorkel.ai" }
+]
+requires-python = ">=3.12, <3.14"
+dependencies = [
+    "harbor @ git+https://github.com/laude-institute/harbor.git@47852c74ec7da74016becfb80e311caf7524b185",
+    "terminal-bench==0.2.18",
+    "typer>=0.16.0",
+]
+
+[project.scripts]
+snorkel-tb-tasks = "snorkel_tb_tasks.main:app"
+stb = "snorkel_tb_tasks.main:app"
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
