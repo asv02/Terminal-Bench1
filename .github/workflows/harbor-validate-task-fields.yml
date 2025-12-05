@@ -1,0 +1,67 @@
+name: Validate Task Fields (Harbor)
+
+on:
+  pull_request:
+    paths:
+      - "harbor_tasks/**/task.toml"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  harbor-validate-task-fields:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install yq
+
+      - name: Validate task.yaml fields
+        id: validate-fields-step
+        run: |
+          # Get list of changed files (for PR) or validate all files (for push to main)
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E 'harbor_tasks/.*/task\.toml$' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No task.toml files changed"
+            exit 0
+          fi
+          echo "Validating changed task.toml files: $CHANGED_FILES"
+          ./scripts_bash/harbor-validate-task-fields.sh $CHANGED_FILES
+
+      - name: Set category output as a label
+        run: |
+          # Get existing labels
+          EXISTING_LABELS=$(gh pr view "$NUMBER" --json labels --jq '.labels[].name')
+
+          # Check if the new label already exists
+          if echo "$EXISTING_LABELS" | grep -q "^${LABEL}$"; then
+            echo "Label '$LABEL' already exists, no change needed"
+          else
+            # Remove any existing difficulty labels
+            for category in "category:system-administration" "category:build-and-dependency-management" "category:data-processing" "category:games" "category:software-engineering" "category:machine-learning" "category:debugging" "category:security" "category:scientific-computing"; do
+              if echo "$EXISTING_LABELS" | grep -q "^${category}$"; then
+                echo "Removing old label: $category"
+                gh pr edit "$NUMBER" --remove-label "$category" || true
+              fi
+            done
+
+            # Add the new label
+            echo "Adding new label: category:$CATEGORY"
+            gh pr edit "$NUMBER" --add-label "category:$CATEGORY"
+          fi
+        env:
+          NUMBER: ${{ github.event.pull_request.number }}
+          CATEGORY: ${{ steps.validate-fields-step.outputs.category }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
