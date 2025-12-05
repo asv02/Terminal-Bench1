@@ -1,0 +1,59 @@
+name: Check Task Absolute Paths
+
+on:
+  pull_request:
+    paths:
+      - "harbor_tasks/**/instruction.md"
+      - "harbor_tasks/**/Dockerfile"
+
+jobs:
+  check-task-absolute-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Check for relative paths in task instructions
+        run: |
+          # Run the absolute path check script on changed tasks
+          CHANGED_TASK_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E 'harbor_tasks/.*/instruction.md$' || true)
+          CHANGED_DOCKERFILE_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E 'harbor_tasks/.*/Dockerfile$' || true)
+
+          # Get unique task directories from changed files
+          CHANGED_TASK_DIRS=""
+          for file in $CHANGED_TASK_FILES $CHANGED_DOCKERFILE_FILES; do
+            if [[ "$file" == harbor_tasks/*/instruction.md ]]; then
+              task_dir=$(dirname "$file")
+            elif [[ "$file" == harbor_tasks/*/Dockerfile ]]; then
+              task_dir=$(dirname "$(dirname "$file")")
+            else
+              continue
+            fi
+            CHANGED_TASK_DIRS="$CHANGED_TASK_DIRS $task_dir"
+          done
+
+          CHANGED_TASK_DIRS=$(echo "$CHANGED_TASK_DIRS" | tr ' ' '\n' | sort | uniq | tr '\n' ' ')
+
+          if [ -z "$CHANGED_TASK_DIRS" ]; then
+            echo "No instruction.md or Dockerfile files changed"
+            exit 0
+          fi
+
+          echo "Checking the following task directories:"
+          echo "$CHANGED_TASK_DIRS"
+          echo
+
+          ./scripts_bash/harbor-check-task-absolute-path.sh $CHANGED_TASK_DIRS
