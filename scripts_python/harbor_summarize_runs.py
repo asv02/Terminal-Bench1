@@ -94,7 +94,11 @@ def parse_pytest_result(test_log_path: str) -> Dict[str, Any]:
     with open(test_log_path, "r") as f:
         test_log = f.read()
     parser = PytestParser()
-    results = parser.parse(test_log)
+    try:
+        results = parser.parse(test_log)
+    except Exception as e:
+        print(f"Error parsing test log {test_log_path}: {e}. This happens when pytest doesn't finish gracefully due to timeout, out of memory, etc.")
+        results = {}
     return results
 
 def main():
