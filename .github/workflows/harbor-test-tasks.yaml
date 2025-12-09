@@ -155,7 +155,9 @@ jobs:
             ./scripts_bash/harbor-consolidate-parallel-runs.sh --new-job-id consolidated-$task --task-id $task
             for N_TRIALS in {10..1}; do
               echo "Debugging $task with $N_TRIALS trials"
-              if uv run harbor tasks debug -m anthropic/claude-sonnet-4-20250514 --job-id consolidated-$task --tasks-dir harbor_tasks -o debug-output-${task}.json --n-trials $N_TRIALS $task; then
+              uv run harbor tasks debug -m anthropic/claude-sonnet-4-20250514 --job-id consolidated-$task --tasks-dir harbor_tasks -o debug-output-${task}.json --n-trials $N_TRIALS $task
+              # if debug-output-${task}.json is created, break
+              if [ -f "debug-output-${task}.json" ]; then
                 break
               fi
             done
