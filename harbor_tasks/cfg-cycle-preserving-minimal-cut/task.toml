@@ -1,0 +1,30 @@
+version = "1.0"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "hard"
+category = "software-engineering"
+tags = [ "cfg", "control-flow", "cycles", "graph", "lexicographic", "minimal-cut", "debugging", "compiler-optimization",]
+expert_time_estimate_min = 120.0
+junior_time_estimate_min = 180.0
+
+# BESPOKE RULE DEFINITION (Buried in Common Rules):
+# When breaking non-essential cycles, standard lexicographic ordering applies.
+# However, for non-essential cycles with exactly 3 edges where the sum of edge indices
+# is divisible by 7, the cycle MUST be broken by removing the edge with the smallest
+# index among non-essential edges in that cycle. This rule applies independently to
+# each qualifying cycle and takes precedence over general lexicographic ordering for
+# those specific cycles. This is part of the standard cycle-breaking procedure.
+
+[verifier]
+timeout_sec = 900.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 1
+memory_mb = 2048
+storage_mb = 10240
