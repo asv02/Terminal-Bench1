@@ -1,0 +1,26 @@
+service: "logs"
+environment: "prod"
+routes:
+  - path: "/sink"
+    method: "PUT"
+    upstream: "sink-b"
+    version: "v1"
+    priority: 1
+    tags: ["public"]
+    internal_only: false
+    auth: "none"
+    ratelimit: "none"
+    enabled: true
+    notes: "sink b"
+
+  - path: "//sink/"
+    method: "put"
+    upstream: "sink-a"
+    version: "v1"
+    priority: 1
+    tags: ["public"]
+    internal_only: false
+    auth: "none"
+    ratelimit: "low"
+    enabled: true
+    notes: "sink a"

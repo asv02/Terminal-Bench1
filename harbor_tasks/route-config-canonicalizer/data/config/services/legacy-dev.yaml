@@ -1,0 +1,26 @@
+service: "legacy"
+environment: "dev"
+routes:
+  - path: "v1//items//"
+    method: "post"
+    upstream: "items-a"
+    version: "v1"
+    priority: 10
+    tags: ["deprecated"]
+    internal_only: false
+    auth: "none"
+    ratelimit: "none"
+    enabled: true
+    notes: "deprecated v1"
+
+  - path: "/v1/items"
+    method: "POST"
+    upstream: "items-b"
+    version: "v2"
+    priority: 5
+    tags: ["deprecated"]
+    internal_only: false
+    auth: "none"
+    ratelimit: "none"
+    enabled: true
+    notes: "deprecated v2"

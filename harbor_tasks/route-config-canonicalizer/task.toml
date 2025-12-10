@@ -1,0 +1,34 @@
+version = "1.0"
+
+[task]
+id = "route-config-canonicalizer"
+name = "Canonical API gateway route normalizer with rollout window awareness."
+solution_script = "solution/solve.sh"
+test_script = "tests/test.sh"
+
+[paths]
+instruction = "instruction.md"
+environment_dockerfile = "environment/Dockerfile"
+data_dir = "data"
+app_dir = "app"
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "unknown"
+category = "data-processing"
+tags = []
+expert_time_estimate_min = 120.0
+junior_time_estimate_min = 150.0
+
+[verifier]
+timeout_sec = 360.0
+
+[agent]
+timeout_sec = 360.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 1
+memory_mb = 2048
+storage_mb = 10240

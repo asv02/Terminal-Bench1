@@ -1,0 +1,26 @@
+service: "analytics"
+environment: "staging"
+routes:
+  - path: "/events"
+    method: "GET"
+    upstream: "events-low"
+    version: "v1"
+    priority: 5
+    tags: ["public"]
+    internal_only: false
+    auth: "jwt"
+    ratelimit: "low"
+    enabled: true
+    notes: "lower priority"
+
+  - path: "events"
+    method: "GET"
+    upstream: "events-high"
+    version: "v1"
+    priority: 15
+    tags: ["public"]
+    internal_only: false
+    auth: "jwt"
+    ratelimit: "medium"
+    enabled: true
+    notes: "higher priority"

@@ -1,0 +1,14 @@
+service: "payments"
+environment: "prod"
+routes:
+  - path: "/api/v1/charge"
+    method: "post"
+    upstream: "charge-v1"
+    version: "v1"
+    priority: 50
+    tags: ["public"]
+    internal_only: false
+    auth: "jwt"
+    ratelimit: "medium"
+    enabled: true
+    notes: "prod charge route"

@@ -1,0 +1,29 @@
+service: "billing"
+environment: "dev"
+routes:
+  - path: "/api/v1/users"
+    method: "GET"
+    upstream: "users-v2"
+    version: "v2"
+    priority: 20
+    tags: ["public"]
+    internal_only: false
+    auth: "jwt"
+    ratelimit: "high"
+    enabled: true
+    notes: "dev v2 users"
+    activation:
+      start_date: "2024-10-01"
+      end_date: "2024-10-31"
+
+  - path: "/api/v1/users"
+    method: "GET"
+    upstream: "users-deprecated"
+    version: "v0"
+    priority: 1
+    tags: ["deprecated", "public"]
+    internal_only: false
+    auth: "jwt"
+    ratelimit: "medium"
+    enabled: true
+    notes: "deprecated variant"
