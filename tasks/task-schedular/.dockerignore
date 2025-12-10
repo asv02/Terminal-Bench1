@@ -1,0 +1,15 @@
+solution.sh
+solution.yaml
+tests/
+Dockerfile
+docker-compose.yaml
+task.yaml
+run-tests.sh
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.venv/
+*.egg-info/
