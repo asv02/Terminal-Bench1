@@ -1,0 +1,3 @@
+{"tasks":[
+  {"task_id":"nest","type":"data_transform","params":{"source":"'a@b.com'","target":"shared_state['user']['profile']['email']"}}
+]}

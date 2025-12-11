@@ -1,0 +1,4 @@
+{"tasks":[
+  {"task_id":"skip","type":"data_transform","run_if":"False",
+   "params":{"source":"'x'","target":"shared_state['never']"}}
+]}

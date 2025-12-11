@@ -1,0 +1,3 @@
+{"tasks":[
+  {"task_id":"bad","type":"log_message","run_if":"shared_state['x'] ==","params":{"level":"info","message":"won't print"}}
+]}

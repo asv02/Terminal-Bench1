@@ -1,0 +1,3 @@
+{"tasks":[
+  {"task_id":"get","type":"http_request","params":{"method":"GET","url":"https://api.test/customers/{{ customer_id }}"}}
+]}

@@ -1,0 +1,4 @@
+{"tasks":[
+  {"task_id":"hit","type":"http_request","params":{"method":"GET","url":"https://api.test/log"}},
+  {"task_id":"say","type":"log_message","params":{"level":"info","message":"User {{ user_id }} has status {{ status }}."}}
+]}
