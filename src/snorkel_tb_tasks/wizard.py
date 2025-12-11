@@ -172,7 +172,3 @@ class SnorkelWizard(Wizard):
                 f"Please enter a valid category number [1-{len(CATEGORIES)}]",
                 color=Colors.RED,
             )
-
-    def _create_files(self, color: str) -> None:
-        super()._create_files(color)
-        self._copy_template_file(".dockerignore")
