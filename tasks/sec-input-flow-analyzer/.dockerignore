@@ -1,0 +1,11 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.DS_Store
+*.egg-info
+.pytest_cache
+.coverage
+.venv
+venv
+node_modules
