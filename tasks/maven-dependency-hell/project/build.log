@@ -1,0 +1,121 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO]
+[INFO] Dependency Hell Parent                                             [pom]
+[INFO] core                                                               [jar]
+[INFO] api                                                                [jar]
+[INFO] service                                                            [jar]
+[INFO]
+[INFO] ------------------< com.example:dependency-hell-parent >------------------
+[INFO] Building Dependency Hell Parent 1.0.0                              [1/4]
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO]
+[INFO] ----------------------< com.example:core >----------------------
+[INFO] Building core 1.0.0                                                [2/4]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ core ---
+[INFO] skip non existing resourceDirectory /app/core/src/main/resources
+[INFO]
+[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ core ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 1 source file to /app/core/target/classes
+[INFO]
+[INFO] -----------------------< com.example:api >------------------------
+[INFO] Building api 1.0.0                                                 [3/4]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ api ---
+[INFO] skip non existing resourceDirectory /app/api/src/main/resources
+[INFO]
+[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ api ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 1 source file to /app/api/target/classes
+[INFO]
+[INFO] ---------------------< com.example:service >----------------------
+[INFO] Building service 1.0.0                                             [4/4]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ service ---
+[INFO] skip non existing resourceDirectory /app/service/src/main/resources
+[INFO]
+[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ service ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 1 source file to /app/service/target/classes
+[INFO]
+[INFO] --- maven-jar-plugin:3.3.0:jar (default-jar) @ service ---
+[INFO] Building jar: /app/service/target/service-1.0.0.jar
+[INFO]
+[INFO] --- maven-assembly-plugin:3.6.0:single (make-assembly) @ service ---
+[INFO] Building jar: /app/service/target/service-1.0.0-jar-with-dependencies.jar
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Dependency Hell Parent 1.0.0:
+[INFO]
+[INFO] Dependency Hell Parent ............................. SUCCESS [  0.234 s]
+[INFO] core ............................................... SUCCESS [  1.456 s]
+[INFO] api ................................................ SUCCESS [  0.892 s]
+[INFO] service ............................................ SUCCESS [  2.103 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  5.127 s
+[INFO] ------------------------------------------------------------------------
+
+=== Running service JAR ===
+$ java -jar /app/service/target/service-1.0.0-jar-with-dependencies.jar
+
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/app/service/target/service-1.0.0-jar-with-dependencies.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/app/service/target/service-1.0.0-jar-with-dependencies.jar!/ch/qos/logback/classic/spi/LogbackServiceProvider.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.slf4j.impl.SimpleLoggerFactory]
+
+Exception in thread "main" java.lang.NoSuchMethodError: 'com.google.common.cache.CacheBuilder com.google.common.cache.CacheBuilder.maximumSize(long)'
+	at com.example.api.ApiClient.<clinit>(ApiClient.java:15)
+	at com.example.service.Application.main(Application.java:12)
+
+=== Build failed at runtime ===
+
+DIAGNOSIS ATTEMPT #1 (by previous developer):
+--------------------------------------------
+Checked api/pom.xml - Guava version looks correct (31.1-jre)
+Checked service/pom.xml - depends on api module correctly
+Theory: Maybe the API module's Guava dependency is being shadowed?
+
+DIAGNOSIS ATTEMPT #2:
+--------------------------------------------
+Ran: mvn dependency:tree -pl api
+Output shows: com.google.guava:guava:jar:31.1-jre:compile
+Guava 31.1-jre DOES have maximumSize() method
+WHY IS IT FAILING???
+
+DIAGNOSIS ATTEMPT #3:
+--------------------------------------------
+Suspected issue: The api module's transitive dependencies
+Checked: api has jackson-databind which might pull old guava?
+Result: No, jackson doesn't depend on guava
+
+SUSPECTED ROOT CAUSE (UNVERIFIED):
+--------------------------------------------
+The service module's assembly plugin might be resolving
+dependencies in wrong order. The api module LOOKS correct
+but something in the build is pulling an older version.
+
+TODO: Check if there's a dependency convergence issue
+      Maybe try maven-enforcer-plugin?
+
+NOTE FROM SENIOR DEV (2024-03-20):
+--------------------------------------------
+"I've spent 3 hours on this. The api module configuration
+ looks perfect. I think it might be a Maven caching issue
+ or something with the assembly plugin. Try cleaning
+ the entire .m2/repository and rebuilding."
+
+$ rm -rf ~/.m2/repository
+$ mvn clean install -DskipTests
+
+... (same error)
+
+GIVING UP - ESCALATING TO PLATFORM TEAM
