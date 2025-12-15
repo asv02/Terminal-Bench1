@@ -1,0 +1,7 @@
+tests/
+test_outputs.py
+solution.sh
+run-tests.sh
+__pycache__/
+*.pyc
+.pytest_cache/
