@@ -1,0 +1,4 @@
+# Ignore tests and solution files in the Docker image
+/tests/
+/solution.sh
+/solution.yaml
