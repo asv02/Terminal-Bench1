@@ -1,0 +1,23 @@
+version = "1.0"
+
+[metadata]
+author_name = "Coder"
+author_email = "coder@snorkel"
+difficulty = "hard"
+category = "debugging"
+tags = [ "go", "deadlock", "concurrency", "http", "runtime",]
+estimated_duration_sec = 60.0
+expert_time_estimate_min = 180.0
+junior_time_estimate_min = 240.0
+
+[verifier]
+timeout_sec = 600.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 1
+memory_mb = 2048
+storage_mb = 10240
