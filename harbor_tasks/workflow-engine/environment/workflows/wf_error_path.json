@@ -1,8 +1,0 @@
-{"on_error_workflow":[
-    {"task_id":"recover","type":"data_transform",
-     "params":{"source":"shared_state['error']","target":"shared_state['error_handled']","expression":"source['task_id']=='boom'"}}
-  ],
- "tasks":[
-   {"task_id":"boom","type":"http_request","params":{"url":"https://api.test/exc_then_ok"},
-    "retry":{"max_attempts":1,"on_exceptions":["SomeOther"]}}
- ]}

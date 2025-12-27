@@ -1,5 +1,0 @@
-{"tasks":[
-  {"task_id":"status_retry","type":"http_request",
-   "params":{"method":"GET","url":"https://api.test/status503_then_ok"},
-   "retry":{"max_attempts":2,"delay_seconds":0.01,"on_status_codes":[503]}}
-]}
